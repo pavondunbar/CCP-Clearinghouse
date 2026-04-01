@@ -1,0 +1,67 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Settlements by Status",
+      "type": "piechart",
+      "targets": [
+        {
+          "expr": "ccp_settlements_by_status",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "id": 2,
+      "title": "Settlement Completion Rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(ccp_settlements_completed_total[5m])",
+          "legendFormat": "Completed/s"
+        },
+        {
+          "expr": "rate(ccp_settlements_failed_total[5m])",
+          "legendFormat": "Failed/s"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "id": 3,
+      "title": "DVP Confirmation Time (avg)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "avg(ccp_dvp_confirmation_seconds)"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "id": 4,
+      "title": "Pending Settlements",
+      "type": "table",
+      "targets": [
+        {
+          "expr": "ccp_settlements_pending",
+          "format": "table"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["ccp", "settlement"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "CCP Settlement Status",
+  "uid": "ccp-settlement-status"
+}

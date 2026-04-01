@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NettingCycleCompleted",
+  "description": "Emitted when a netting cycle completes with calculated obligations",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "timestamp",
+    "netting_cycle_id",
+    "cycle_type",
+    "cut_off_time",
+    "net_obligations"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "netting.cycle.completed" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "netting_cycle_id": { "type": "string", "format": "uuid" },
+    "cycle_type": {
+      "type": "string",
+      "enum": ["scheduled", "manual", "intraday"]
+    },
+    "cut_off_time": { "type": "string", "format": "date-time" },
+    "trades_included": { "type": "integer", "minimum": 0 },
+    "net_obligations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "obligation_id",
+          "member_id",
+          "instrument_id",
+          "net_quantity",
+          "net_amount",
+          "settlement_amount"
+        ],
+        "properties": {
+          "obligation_id": { "type": "string", "format": "uuid" },
+          "member_id": { "type": "string", "format": "uuid" },
+          "instrument_id": { "type": "string", "format": "uuid" },
+          "net_quantity": { "type": "string" },
+          "net_amount": { "type": "string" },
+          "settlement_amount": { "type": "string" }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

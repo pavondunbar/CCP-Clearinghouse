@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TradeNovated",
+  "description": "Emitted when a trade is novated, creating CCP-facing positions",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "timestamp",
+    "original_trade_id",
+    "novated_trades"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "trade.novated" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "original_trade_id": { "type": "string", "format": "uuid" },
+    "novated_trades": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "novated_trade_id",
+          "member_id",
+          "instrument_id",
+          "side",
+          "quantity",
+          "price"
+        ],
+        "properties": {
+          "novated_trade_id": { "type": "string", "format": "uuid" },
+          "member_id": { "type": "string", "format": "uuid" },
+          "instrument_id": { "type": "string", "format": "uuid" },
+          "side": { "type": "string", "enum": ["BUY", "SELL"] },
+          "quantity": { "type": "string", "pattern": "^\\d+\\.?\\d*$" },
+          "price": { "type": "string", "pattern": "^\\d+\\.?\\d*$" }
+        }
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "margin_locked": {
+      "type": "object",
+      "properties": {
+        "buyer_amount": { "type": "string" },
+        "seller_amount": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,93 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Total Margin Required vs Posted",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(ccp_margin_required_total)",
+          "legendFormat": "Required"
+        },
+        {
+          "expr": "sum(ccp_margin_posted_total)",
+          "legendFormat": "Posted"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "Margin Coverage Ratio",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "sum(ccp_margin_posted_total) / sum(ccp_margin_required_total)"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 1.2 }
+            ]
+          },
+          "min": 0,
+          "max": 2
+        }
+      }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "Active Margin Calls",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "ccp_margin_calls_active",
+          "legendFormat": "Active Calls"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "title": "Margin Shortfall by Member",
+      "type": "bargauge",
+      "targets": [
+        {
+          "expr": "ccp_margin_shortfall_by_member",
+          "legendFormat": "{{member}}"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["ccp", "margin"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "CCP Margin Health",
+  "uid": "ccp-margin-health"
+}

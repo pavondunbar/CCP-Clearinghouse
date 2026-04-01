@@ -1,0 +1,328 @@
+networks:
+  dmz:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: true
+  signing:
+    driver: bridge
+    internal: true
+
+volumes:
+  pgdata:
+
+x-common-env: &common-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB}
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+x-service-healthcheck: &service-healthcheck
+  test: >-
+    python -c "import urllib.request;
+    urllib.request.urlopen('http://localhost:8080/health')"
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 15s
+
+x-common-depends: &common-depends
+  postgres:
+    condition: service_healthy
+  kafka:
+    condition: service_healthy
+  init-db:
+    condition: service_completed_successfully
+
+services:
+  # ---------- Infrastructure ----------
+
+  postgres:
+    image: postgres:16
+    networks:
+      - internal
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "5432:5432"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    networks:
+      - internal
+    environment:
+      ZOOKEEPER_CLIENT_PORT: "2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    networks:
+      - internal
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: "1"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  init-db:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+    networks:
+      - internal
+    env_file: .env
+    environment:
+      <<: *common-env
+      POSTGRES_ADMIN_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_ADMIN_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_LEDGER_USER: ${POSTGRES_LEDGER_USER}
+      POSTGRES_LEDGER_PASSWORD: ${POSTGRES_LEDGER_PASSWORD}
+      POSTGRES_READONLY_USER: ${POSTGRES_READONLY_USER}
+      POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["bash", "/app/scripts/init-db.sh"]
+    restart: "no"
+
+  # ---------- Business Services ----------
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    networks:
+      - dmz
+      - internal
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  trade-ingestion:
+    build:
+      context: .
+      dockerfile: services/trade-ingestion/Dockerfile
+    networks:
+      - internal
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      <<: *service-healthcheck
+
+  outbox-publisher:
+    build:
+      context: .
+      dockerfile: services/outbox-publisher/Dockerfile
+    networks:
+      - internal
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      <<: *service-healthcheck
+
+  netting-engine:
+    build:
+      context: .
+      dockerfile: services/netting-engine/Dockerfile
+    networks:
+      - internal
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      <<: *service-healthcheck
+
+  margin-engine:
+    build:
+      context: .
+      dockerfile: services/margin-engine/Dockerfile
+    networks:
+      - internal
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      <<: *service-healthcheck
+
+  collateral-manager:
+    build:
+      context: .
+      dockerfile: services/collateral-manager/Dockerfile
+    networks:
+      - internal
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      <<: *service-healthcheck
+
+  settlement-engine:
+    build:
+      context: .
+      dockerfile: services/settlement-engine/Dockerfile
+    networks:
+      - internal
+      - signing
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      <<: *service-healthcheck
+
+  liquidation-engine:
+    build:
+      context: .
+      dockerfile: services/liquidation-engine/Dockerfile
+    networks:
+      - internal
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      <<: *service-healthcheck
+
+  price-oracle:
+    build:
+      context: .
+      dockerfile: services/price-oracle/Dockerfile
+    networks:
+      - internal
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      <<: *service-healthcheck
+
+  compliance-monitor:
+    build:
+      context: .
+      dockerfile: services/compliance-monitor/Dockerfile
+    networks:
+      - internal
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      <<: *service-healthcheck
+
+  # ---------- Signing Infrastructure ----------
+
+  signing-gateway:
+    build:
+      context: .
+      dockerfile: services/signing-gateway/Dockerfile
+    networks:
+      - internal
+      - signing
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8010/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  mpc-node-1:
+    build:
+      context: .
+      dockerfile: services/mpc-node/Dockerfile
+    networks:
+      - signing
+    env_file: .env
+    environment:
+      MPC_NODE_ID: "1"
+      MPC_KEY_SHARE_PATH: /secrets/key_share_1
+
+  mpc-node-2:
+    build:
+      context: .
+      dockerfile: services/mpc-node/Dockerfile
+    networks:
+      - signing
+    env_file: .env
+    environment:
+      MPC_NODE_ID: "2"
+      MPC_KEY_SHARE_PATH: /secrets/key_share_2
+
+  mpc-node-3:
+    build:
+      context: .
+      dockerfile: services/mpc-node/Dockerfile
+    networks:
+      - signing
+    env_file: .env
+    environment:
+      MPC_NODE_ID: "3"
+      MPC_KEY_SHARE_PATH: /secrets/key_share_3
+
+  # ---------- Reconciliation ----------
+
+  reconciliation-engine:
+    build:
+      context: .
+      dockerfile: services/reconciliation-engine/Dockerfile
+    networks:
+      - internal
+    env_file: .env
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      <<: *service-healthcheck

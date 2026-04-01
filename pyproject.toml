@@ -1,0 +1,38 @@
+[project]
+name = "ccp-clearing-house"
+version = "0.1.0"
+description = "Central Counterparty Clearing House for crypto derivatives and tokenized securities"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.uv.workspace]
+members = [
+    "shared",
+    "services/*",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "N",
+    "UP",
+    "B",
+    "A",
+    "SIM",
+    "TCH",
+    "RUF",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ccp_shared"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

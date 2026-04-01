@@ -1,0 +1,19 @@
+FROM python:3.13-slim AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_SYSTEM_PYTHON=1
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libpq-dev postgresql-client && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+COPY shared/ /app/shared/
+RUN cd /app/shared && uv pip install .
+
+COPY migrations/ /app/migrations/
+COPY scripts/ /app/scripts/

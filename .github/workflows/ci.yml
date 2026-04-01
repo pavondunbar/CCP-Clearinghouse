@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@6b9c6063abd6010835c3c7f4a7d943c6e1fec26d  # v5.3.0
+        with:
+          version: "latest"
+
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system ruff
+          cd shared && uv pip install --system .
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
+
+  test-unit:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@6b9c6063abd6010835c3c7f4a7d943c6e1fec26d  # v5.3.0
+        with:
+          version: "latest"
+
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          cd shared && uv pip install --system .
+          for svc in services/*/; do
+            if [ -f "$svc/pyproject.toml" ]; then
+              cd "$svc" && uv pip install --system . && cd ../..
+            fi
+          done
+          uv pip install --system pytest
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -q
+
+  test-integration:
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: admin_user
+          POSTGRES_PASSWORD: admin_secret_change_me
+          POSTGRES_DB: ccp_clearing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@6b9c6063abd6010835c3c7f4a7d943c6e1fec26d  # v5.3.0
+        with:
+          version: "latest"
+
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          cd shared && uv pip install --system .
+          for svc in services/*/; do
+            if [ -f "$svc/pyproject.toml" ]; then
+              cd "$svc" && uv pip install --system . && cd ../..
+            fi
+          done
+          uv pip install --system pytest alembic psycopg[binary] testcontainers
+
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql://admin_user:admin_secret_change_me@localhost:5432/ccp_clearing
+        run: pytest tests/integration/ -q

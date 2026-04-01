@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MarginCallIssued",
+  "description": "Emitted when a margin call is issued to a clearing member",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "timestamp",
+    "margin_call_id",
+    "member_id",
+    "margin_type",
+    "call_amount",
+    "deadline"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "margin.call.issued" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "margin_call_id": { "type": "string", "format": "uuid" },
+    "member_id": { "type": "string", "format": "uuid" },
+    "margin_type": { "type": "string", "enum": ["INITIAL", "VARIATION"] },
+    "call_amount": { "type": "string", "pattern": "^\\d+\\.?\\d*$" },
+    "deadline": { "type": "string", "format": "date-time" },
+    "instrument_id": { "type": "string", "format": "uuid" },
+    "required_amount": { "type": "string" },
+    "posted_amount": { "type": "string" },
+    "shortfall": { "type": "string" }
+  },
+  "additionalProperties": false
+}

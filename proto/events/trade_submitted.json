@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TradeSubmitted",
+  "description": "Emitted when a new trade is submitted via the API gateway",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "timestamp",
+    "trade_id",
+    "external_trade_id",
+    "instrument_id",
+    "buyer_member_id",
+    "seller_member_id",
+    "quantity",
+    "price"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "trade.submitted" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "trade_id": { "type": "string", "format": "uuid" },
+    "external_trade_id": { "type": "string", "maxLength": 100 },
+    "instrument_id": { "type": "string", "format": "uuid" },
+    "buyer_member_id": { "type": "string", "format": "uuid" },
+    "seller_member_id": { "type": "string", "format": "uuid" },
+    "quantity": { "type": "string", "pattern": "^\\d+\\.?\\d*$" },
+    "price": { "type": "string", "pattern": "^\\d+\\.?\\d*$" }
+  },
+  "additionalProperties": false
+}

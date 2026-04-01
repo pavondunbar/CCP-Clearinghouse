@@ -1,0 +1,57 @@
+groups:
+  - name: ccp_clearing_alerts
+    rules:
+      - alert: MarginBreachAlert
+        expr: ccp_margin_shortfall_total > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Margin shortfall detected"
+          description: >-
+            Member {{ $labels.member_id }} has margin shortfall
+            of {{ $value }} for longer than 5 minutes.
+
+      - alert: SettlementFailureAlert
+        expr: rate(ccp_settlement_failures_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Settlement failure rate elevated"
+          description: >-
+            Settlement failure rate is {{ $value }}/s
+            over the last 5 minutes.
+
+      - alert: ServiceDownAlert
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: >-
+            {{ $labels.job }} has been unreachable
+            for more than 1 minute.
+
+      - alert: OutboxLagAlert
+        expr: ccp_outbox_unpublished_events > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox event lag is high"
+          description: >-
+            {{ $value }} unpublished outbox events
+            for more than 2 minutes.
+
+      - alert: DefaultFundAlert
+        expr: ccp_default_fund_total < ccp_default_fund_requirement
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Default fund below requirement"
+          description: >-
+            Total default fund {{ $value }} is below the
+            required minimum {{ $labels.requirement }}.
