@@ -114,7 +114,7 @@ DEFAULT_FUND_AMOUNTS = {
 def seed_ccp_house_account(conn: psycopg.Connection) -> uuid.UUID:
     """Create the CCP house member and its accounts."""
     ccp_id = uuid.uuid4()
-    conn.execute(
+    cur = conn.execute(
         """
         INSERT INTO members (id, lei, name, status, credit_limit)
         VALUES (%s, %s, %s, 'active', 0)
@@ -123,7 +123,7 @@ def seed_ccp_house_account(conn: psycopg.Connection) -> uuid.UUID:
         """,
         (str(ccp_id), "CCP000000000000000", "CCP House Account"),
     )
-    row = conn.fetchone()
+    row = cur.fetchone()
     ccp_id = row[0] if row else ccp_id
 
     for acct_type in [*ACCOUNT_TYPES, "CCP_EQUITY"]:
@@ -145,7 +145,7 @@ def seed_members(conn: psycopg.Connection) -> dict[str, str]:
     member_ids = {}
     for member in MEMBERS:
         member_id = str(uuid.uuid4())
-        conn.execute(
+        cur = conn.execute(
             """
             INSERT INTO members (id, lei, name, status, credit_limit)
             VALUES (%s, %s, %s, 'active', %s)
@@ -155,7 +155,7 @@ def seed_members(conn: psycopg.Connection) -> dict[str, str]:
             """,
             (member_id, member["lei"], member["name"], member["credit_limit"]),
         )
-        row = conn.fetchone()
+        row = cur.fetchone()
         member_ids[member["name"]] = str(row[0]) if row else member_id
 
         for acct_type in ACCOUNT_TYPES:
@@ -206,19 +206,19 @@ def seed_default_fund(
     for name, amount in DEFAULT_FUND_AMOUNTS.items():
         mid = member_ids[name]
 
-        conn.execute(
+        cur = conn.execute(
             "SELECT id FROM accounts WHERE member_id = %s "
             "AND account_type = 'DEFAULT_FUND' AND pool = 'AVAILABLE'",
             (mid,),
         )
-        member_acct = conn.fetchone()
+        member_acct = cur.fetchone()
 
-        conn.execute(
+        cur = conn.execute(
             "SELECT id FROM accounts WHERE member_id = %s "
             "AND account_type = 'CCP_EQUITY' AND pool = 'AVAILABLE'",
             (str(ccp_id),),
         )
-        ccp_acct = conn.fetchone()
+        ccp_acct = cur.fetchone()
 
         if not member_acct or not ccp_acct:
             print(f"  Skipping default fund for {name}: accounts not found")

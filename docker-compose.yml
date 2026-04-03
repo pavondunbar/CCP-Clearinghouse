@@ -14,8 +14,15 @@ volumes:
 x-common-env: &common-env
   POSTGRES_HOST: postgres
   POSTGRES_PORT: "5432"
-  POSTGRES_DB: ${POSTGRES_DB}
+  POSTGRES_DB: ccp_clearing
+  POSTGRES_ADMIN_USER: admin_user
+  POSTGRES_ADMIN_PASSWORD: admin_secret_change_me
+  POSTGRES_LEDGER_USER: ledger_user
+  POSTGRES_LEDGER_PASSWORD: ledger_secret_change_me
+  POSTGRES_READONLY_USER: readonly_user
+  POSTGRES_READONLY_PASSWORD: readonly_secret_change_me
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  SIGNING_GATEWAY_HOST: signing-gateway
 
 x-service-healthcheck: &service-healthcheck
   test: >-
@@ -40,22 +47,22 @@ services:
   postgres:
     image: postgres:16
     networks:
+      - dmz
       - internal
     volumes:
       - pgdata:/var/lib/postgresql/data
-    env_file: .env
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_DB: ccp_clearing
+      POSTGRES_USER: admin_user
+      POSTGRES_PASSWORD: admin_secret_change_me
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U admin_user -d ccp_clearing"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     ports:
-      - "5432:5432"
+      - "5433:5432"
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
@@ -88,19 +95,33 @@ services:
       dockerfile: Dockerfile.base
     networks:
       - internal
-    env_file: .env
     environment:
       <<: *common-env
-      POSTGRES_ADMIN_USER: ${POSTGRES_ADMIN_USER}
-      POSTGRES_ADMIN_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
-      POSTGRES_LEDGER_USER: ${POSTGRES_LEDGER_USER}
-      POSTGRES_LEDGER_PASSWORD: ${POSTGRES_LEDGER_PASSWORD}
-      POSTGRES_READONLY_USER: ${POSTGRES_READONLY_USER}
-      POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD}
+      POSTGRES_ADMIN_USER: admin_user
+      POSTGRES_ADMIN_PASSWORD: admin_secret_change_me
+      POSTGRES_LEDGER_USER: ledger_user
+      POSTGRES_LEDGER_PASSWORD: ledger_secret_change_me
+      POSTGRES_READONLY_USER: readonly_user
+      POSTGRES_READONLY_PASSWORD: readonly_secret_change_me
     depends_on:
       postgres:
         condition: service_healthy
     command: ["bash", "/app/scripts/init-db.sh"]
+    restart: "no"
+
+  seed-data:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+    networks:
+      - internal
+    environment:
+      DATABASE_URL: >-
+        postgresql://admin_user:admin_secret_change_me@postgres:5432/ccp_clearing
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+    command: ["python", "/app/scripts/seed-members.py"]
     restart: "no"
 
   # ---------- Business Services ----------
@@ -114,7 +135,6 @@ services:
       - internal
     ports:
       - "8000:8000"
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:
@@ -134,13 +154,18 @@ services:
       dockerfile: services/trade-ingestion/Dockerfile
     networks:
       - internal
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:
       <<: *common-depends
     healthcheck:
-      <<: *service-healthcheck
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8001/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   outbox-publisher:
     build:
@@ -148,27 +173,40 @@ services:
       dockerfile: services/outbox-publisher/Dockerfile
     networks:
       - internal
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:
       <<: *common-depends
     healthcheck:
-      <<: *service-healthcheck
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8002/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   netting-engine:
     build:
       context: .
       dockerfile: services/netting-engine/Dockerfile
     networks:
+      - dmz
       - internal
-    env_file: .env
+    ports:
+      - "8081:8003"
     environment:
       <<: *common-env
     depends_on:
       <<: *common-depends
     healthcheck:
-      <<: *service-healthcheck
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8003/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   margin-engine:
     build:
@@ -176,13 +214,18 @@ services:
       dockerfile: services/margin-engine/Dockerfile
     networks:
       - internal
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:
       <<: *common-depends
     healthcheck:
-      <<: *service-healthcheck
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8004/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   collateral-manager:
     build:
@@ -190,13 +233,18 @@ services:
       dockerfile: services/collateral-manager/Dockerfile
     networks:
       - internal
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:
       <<: *common-depends
     healthcheck:
-      <<: *service-healthcheck
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8005/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   settlement-engine:
     build:
@@ -205,13 +253,18 @@ services:
     networks:
       - internal
       - signing
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:
       <<: *common-depends
     healthcheck:
-      <<: *service-healthcheck
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8006/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   liquidation-engine:
     build:
@@ -219,13 +272,18 @@ services:
       dockerfile: services/liquidation-engine/Dockerfile
     networks:
       - internal
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:
       <<: *common-depends
     healthcheck:
-      <<: *service-healthcheck
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8007/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   price-oracle:
     build:
@@ -233,13 +291,18 @@ services:
       dockerfile: services/price-oracle/Dockerfile
     networks:
       - internal
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:
       <<: *common-depends
     healthcheck:
-      <<: *service-healthcheck
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8008/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   compliance-monitor:
     build:
@@ -247,13 +310,18 @@ services:
       dockerfile: services/compliance-monitor/Dockerfile
     networks:
       - internal
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:
       <<: *common-depends
     healthcheck:
-      <<: *service-healthcheck
+      test: >-
+        python -c "import urllib.request;
+        urllib.request.urlopen('http://localhost:8009/health')"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # ---------- Signing Infrastructure ----------
 
@@ -264,7 +332,6 @@ services:
     networks:
       - internal
       - signing
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:
@@ -284,7 +351,6 @@ services:
       dockerfile: services/mpc-node/Dockerfile
     networks:
       - signing
-    env_file: .env
     environment:
       MPC_NODE_ID: "1"
       MPC_KEY_SHARE_PATH: /secrets/key_share_1
@@ -295,7 +361,6 @@ services:
       dockerfile: services/mpc-node/Dockerfile
     networks:
       - signing
-    env_file: .env
     environment:
       MPC_NODE_ID: "2"
       MPC_KEY_SHARE_PATH: /secrets/key_share_2
@@ -306,7 +371,6 @@ services:
       dockerfile: services/mpc-node/Dockerfile
     networks:
       - signing
-    env_file: .env
     environment:
       MPC_NODE_ID: "3"
       MPC_KEY_SHARE_PATH: /secrets/key_share_3
@@ -319,7 +383,6 @@ services:
       dockerfile: services/reconciliation-engine/Dockerfile
     networks:
       - internal
-    env_file: .env
     environment:
       <<: *common-env
     depends_on:

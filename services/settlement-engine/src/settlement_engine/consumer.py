@@ -50,10 +50,7 @@ async def consume_loop(
     consumer = Consumer(conf)
     consumer.subscribe(topics)
     chain_registry = _build_chain_registry()
-    signing_client = SigningClient(
-        host=settings.signing_gateway_host,
-        port=settings.signing_gateway_port,
-    )
+    signing_client = SigningClient(settings)
     logger.info("Settlement consumer subscribed to %s", topics)
 
     try:
@@ -88,6 +85,7 @@ async def consume_loop(
                         conn, instruction_id,
                         chain_registry, signing_client, trace,
                     )
+                    conn.commit()
                     logger.info("Settlement result: %s", result)
                 finally:
                     conn.close()

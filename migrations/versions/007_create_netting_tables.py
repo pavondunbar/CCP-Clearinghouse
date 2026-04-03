@@ -21,7 +21,7 @@ def upgrade():
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             completed_at TIMESTAMPTZ,
             CONSTRAINT chk_netting_cycle_type
-                CHECK (cycle_type IN ('scheduled', 'ad_hoc')),
+                CHECK (cycle_type IN ('scheduled', 'manual', 'intraday')),
             CONSTRAINT chk_netting_cycle_status
                 CHECK (status IN (
                     'initiated', 'calculating', 'confirmed',

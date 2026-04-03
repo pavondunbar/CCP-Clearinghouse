@@ -1,5 +1,6 @@
 """Settlement execution with full state machine for cash and DVP."""
 
+import base64
 import logging
 import time
 import uuid
@@ -150,27 +151,32 @@ def _settle_cash(
     _advance_status(conn, inst_id, "signed", "broadcasted", "Cash: no broadcast needed", trace)
 
     journal_id = str(uuid.uuid4())
-    conn.execute(
-        """
-        INSERT INTO journals (id, journal_type, reference_type, reference_id, status)
-        VALUES (%s, 'SETTLEMENT', 'settlement_instruction', %s, 'confirmed')
-        """,
-        (journal_id, inst_id),
-    )
-    conn.execute(
-        """
-        INSERT INTO journal_entries (journal_id, account_id, debit, credit)
-        VALUES (%s, %s, 0, %s)
-        """,
-        (journal_id, from_acct, amount),
-    )
-    conn.execute(
-        """
-        INSERT INTO journal_entries (journal_id, account_id, debit, credit)
-        VALUES (%s, %s, %s, 0)
-        """,
-        (journal_id, to_acct, amount),
-    )
+    if amount and Decimal(str(amount)) > 0:
+        conn.execute(
+            """
+            INSERT INTO journals
+                (id, journal_type, reference_type, reference_id, status)
+            VALUES (%s, 'SETTLEMENT', 'settlement_instruction',
+                    %s, 'confirmed')
+            """,
+            (journal_id, inst_id),
+        )
+        conn.execute(
+            """
+            INSERT INTO journal_entries
+                (journal_id, account_id, debit, credit)
+            VALUES (%s, %s, 0, %s)
+            """,
+            (journal_id, from_acct, amount),
+        )
+        conn.execute(
+            """
+            INSERT INTO journal_entries
+                (journal_id, account_id, debit, credit)
+            VALUES (%s, %s, %s, 0)
+            """,
+            (journal_id, to_acct, amount),
+        )
 
     _advance_status(
         conn, inst_id, "broadcasted", "confirmed",
@@ -219,15 +225,18 @@ def _settle_dvp(
 
     try:
         dvp_instruction = DVPInstruction(
-            from_address=from_member,
-            to_address=to_member,
-            token_address=contract_address or "",
-            quantity=quantity,
-            amount=amount,
             chain_id=chain_id,
+            seller_address=from_member,
+            buyer_address=to_member,
+            asset_token_address=contract_address or "",
+            asset_amount=quantity,
+            payment_token_address="",
+            payment_amount=amount,
+            instruction_id=uuid.UUID(inst_id),
         )
         unsigned_tx = adapter.build_dvp_tx(dvp_instruction)
-        signed_tx = signing_client.sign(unsigned_tx, chain_id)
+        sign_response = signing_client.sign(unsigned_tx, chain_id)
+        signed_tx = base64.b64decode(sign_response.signed_tx_bytes)
 
         conn.autocommit = False
         _advance_status(conn, inst_id, "approved", "signed", "MPC signing complete", trace)
@@ -256,7 +265,7 @@ def _settle_dvp(
         if tx_result.status == TransactionStatus.CONFIRMED:
             return _finalize_dvp(
                 conn, inst_id, from_member, to_member, amount,
-                result.tx_hash, tx_result.block_number,
+                result.tx_hash, None,
                 tx_result.confirmations, trace,
             )
         else:

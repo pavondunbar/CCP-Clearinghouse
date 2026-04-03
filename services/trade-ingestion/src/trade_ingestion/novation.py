@@ -201,8 +201,8 @@ def _lock_margin(
     amount: Decimal,
 ) -> None:
     """Lock initial margin by journaling from AVAILABLE to LOCKED."""
-    available_id = _find_account(conn, member_id, "MARGIN", "AVAILABLE")
-    locked_id = _find_account(conn, member_id, "MARGIN", "LOCKED")
+    available_id = _find_account(conn, member_id, "MARGIN_IM", "AVAILABLE")
+    locked_id = _find_account(conn, member_id, "MARGIN_IM", "LOCKED")
 
     journal_row = conn.execute(
         """

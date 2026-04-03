@@ -8,25 +8,25 @@ from pydantic_settings import BaseSettings
 class CCPSettings(BaseSettings):
     """Central configuration for all CCP services.
 
-    Reads from environment variables with optional .env file support.
+    Reads from environment variables.
     All field names map to uppercase env vars automatically.
     """
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file_encoding": "utf-8"}
 
     # Postgres
     postgres_host: str = "localhost"
     postgres_port: int = 5432
-    postgres_db: str = "ccp"
+    postgres_db: str = "ccp_clearing"
 
-    postgres_admin_user: str = "ccp_admin"
-    postgres_admin_password: str = "admin_secret"
+    postgres_admin_user: str = "admin_user"
+    postgres_admin_password: str = "admin_secret_change_me"
 
-    postgres_ledger_user: str = "ccp_ledger"
-    postgres_ledger_password: str = "ledger_secret"
+    postgres_ledger_user: str = "ledger_user"
+    postgres_ledger_password: str = "ledger_secret_change_me"
 
-    postgres_readonly_user: str = "ccp_readonly"
-    postgres_readonly_password: str = "readonly_secret"
+    postgres_readonly_user: str = "readonly_user"
+    postgres_readonly_password: str = "readonly_secret_change_me"
 
     # Kafka
     kafka_bootstrap_servers: str = "localhost:9092"
@@ -41,9 +41,9 @@ class CCPSettings(BaseSettings):
     margin_call_deadline_minutes: int = 60
 
     # MPC signing
-    mpc_threshold: int = 3
-    mpc_total_nodes: int = 5
-    signing_gateway_host: str = "localhost"
+    mpc_threshold: int = 2
+    mpc_total_nodes: int = 3
+    signing_gateway_host: str = "signing-gateway"
     signing_gateway_port: int = 8010
 
     # API keys (JSON string: {"key": "role", ...})

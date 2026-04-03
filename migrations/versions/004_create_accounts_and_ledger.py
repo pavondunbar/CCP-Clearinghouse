@@ -23,8 +23,8 @@ def upgrade():
             UNIQUE (member_id, account_type, currency, pool),
             CONSTRAINT chk_accounts_type
                 CHECK (account_type IN (
-                    'MARGIN', 'SETTLEMENT', 'DEFAULT_FUND',
-                    'FEE', 'COLLATERAL', 'CCP_SKIN_IN_GAME'
+                    'MARGIN_IM', 'MARGIN_VM', 'SETTLEMENT',
+                    'DEFAULT_FUND', 'COLLATERAL', 'CCP_EQUITY'
                 )),
             CONSTRAINT chk_accounts_pool
                 CHECK (pool IN ('AVAILABLE', 'RESERVED', 'LOCKED'))
@@ -45,7 +45,8 @@ def upgrade():
                     'MARGIN_CALL', 'SETTLEMENT',
                     'FEE_COLLECTION', 'DEFAULT_CLOSE_OUT',
                     'WATERFALL_LOSS', 'COLLATERAL_TRANSFER',
-                    'NETTING', 'ADJUSTMENT'
+                    'NETTING', 'ADJUSTMENT',
+                    'DEFAULT_FUND_CONTRIBUTION'
                 )),
             CONSTRAINT chk_journals_status
                 CHECK (status IN ('pending', 'confirmed', 'rejected'))

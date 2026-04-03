@@ -24,7 +24,18 @@ from ccp_shared.trace import TraceContext
 
 logger = logging.getLogger(__name__)
 
-CCP_MEMBER_ID = "00000000-0000-0000-0000-000000000000"
+CCP_LEI = "CCP000000000000000"
+
+
+def _get_ccp_member_id(conn: psycopg.Connection) -> str:
+    """Look up the CCP house account member ID by LEI."""
+    row = conn.execute(
+        "SELECT id FROM members WHERE lei = %s",
+        (CCP_LEI,),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("CCP House Account not found in members table")
+    return str(row[0])
 
 
 def calculate_net_obligations(
@@ -182,6 +193,7 @@ def _insert_obligations_and_instructions(
     conn: psycopg.Connection,
     cycle_id: str,
     obligations: list[dict[str, Any]],
+    ccp_member_id: str,
 ) -> list[str]:
     """Insert net obligations and settlement instructions.
 
@@ -189,6 +201,7 @@ def _insert_obligations_and_instructions(
         conn: Active database connection.
         cycle_id: UUID of the netting cycle.
         obligations: Computed net obligation dicts.
+        ccp_member_id: UUID of the CCP house account.
 
     Returns:
         List of settlement instruction UUIDs created.
@@ -218,9 +231,9 @@ def _insert_obligations_and_instructions(
         instr_id = str(uuid.uuid4())
         if obl["net_amount"] > Decimal("0"):
             from_member = obl["member_id"]
-            to_member = CCP_MEMBER_ID
+            to_member = ccp_member_id
         else:
-            from_member = CCP_MEMBER_ID
+            from_member = ccp_member_id
             to_member = obl["member_id"]
 
         stype = obl["settlement_type"]
@@ -254,19 +267,19 @@ def _mark_trades_closed(
     conn: psycopg.Connection,
     cut_off_time: datetime,
 ) -> int:
-    """Mark included novated trades as closed after netting.
+    """Mark included novated trades as netted after netting.
 
     Args:
         conn: Active database connection.
         cut_off_time: Trades novated at or before this time.
 
     Returns:
-        Number of trades marked as closed.
+        Number of trades marked as netted.
     """
     cursor = conn.execute(
         """
         UPDATE novated_trades
-        SET status = 'closed'
+        SET status = 'netted'
         WHERE status = 'open' AND novated_at <= %s
         """,
         (cut_off_time,),
@@ -365,12 +378,14 @@ def run_netting_cycle(
             (NettingCycleStatus.CALCULATING.value, cycle_id),
         )
 
+        ccp_member_id = _get_ccp_member_id(conn)
+
         positions = _fetch_open_positions(conn, cut_off_time)
         positions = _enrich_with_prices(conn, positions)
         obligations = calculate_net_obligations(positions)
 
         instruction_ids = _insert_obligations_and_instructions(
-            conn, cycle_id, obligations
+            conn, cycle_id, obligations, ccp_member_id
         )
 
         trades_netted = _mark_trades_closed(conn, cut_off_time)

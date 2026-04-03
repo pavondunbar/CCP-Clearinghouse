@@ -26,11 +26,12 @@ def upgrade():
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             CONSTRAINT chk_instruments_asset_class
                 CHECK (asset_class IN (
-                    'equity', 'fixed_income', 'commodity',
-                    'fx', 'crypto', 'derivative'
+                    'crypto_future', 'crypto_option',
+                    'crypto_perpetual', 'tokenized_equity',
+                    'tokenized_bond', 'tokenized_rwa'
                 )),
             CONSTRAINT chk_instruments_settlement_type
-                CHECK (settlement_type IN ('cash', 'physical', 'hybrid'))
+                CHECK (settlement_type IN ('cash', 'physical', 'dvp'))
         )
     """)
 
