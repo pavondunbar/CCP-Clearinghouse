@@ -150,7 +150,7 @@ migrate:
 	docker compose exec api-gateway alembic -c /app/migrations/alembic.ini upgrade head
 
 seed:
-	docker compose exec api-gateway python /app/scripts/seed-members.py
+	docker compose run --rm seed-data
 
 seed-accounts: seed
 
