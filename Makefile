@@ -120,7 +120,7 @@ monitoring-down:
 # ── Database ────────────────────────────────────────────────
 
 db-balances:
-	docker compose exec postgres psql -U ccp_admin -d ccp_clearing -c \
+	docker compose exec postgres psql -U admin_user -d ccp_clearing -c \
 		"SELECT m.name, a.account_type, a.pool, COALESCE(ab.balance, 0) AS balance \
 		 FROM accounts a \
 		 JOIN members m ON m.id = a.member_id \
@@ -129,7 +129,7 @@ db-balances:
 		 ORDER BY m.name, a.account_type, a.pool;"
 
 db-ledger:
-	docker compose exec postgres psql -U readonly_user -d ccp_clearing -c \
+	docker compose exec postgres psql -U admin_user -d ccp_clearing -c \
 		"SELECT j.journal_type, je.debit, je.credit, je.narrative, je.created_at \
 		 FROM journal_entries je \
 		 JOIN journals j ON j.id = je.journal_id \
@@ -137,14 +137,14 @@ db-ledger:
 		 LIMIT 30;"
 
 db-rtgs:
-	docker compose exec postgres psql -U readonly_user -d ccp_clearing -c \
+	docker compose exec postgres psql -U admin_user -d ccp_clearing -c \
 		"SELECT id, settlement_type, status, chain_id, tx_hash, created_at \
 		 FROM settlement_instructions \
 		 ORDER BY created_at DESC \
 		 LIMIT 20;"
 
 shell-pg:
-	docker compose exec postgres psql -U readonly_user -d ccp_clearing
+	docker compose exec postgres psql -U admin_user -d ccp_clearing
 
 migrate:
 	docker compose exec api-gateway alembic -c /app/migrations/alembic.ini upgrade head
