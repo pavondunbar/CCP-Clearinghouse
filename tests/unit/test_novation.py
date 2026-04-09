@@ -10,6 +10,7 @@ from decimal import Decimal
 import psycopg
 import pytest
 
+from ccp_shared.trace import TraceContext
 from trade_ingestion.novation import (
     ValidationError,
     novate_trade,
@@ -132,8 +133,9 @@ class TestNovationCreatesTrades:
             "price": Decimal("50"),
         }
 
+        trace = TraceContext.new_system("test")
         result = novate_trade(
-            tx_conn, uuid.UUID(trade_id), trade_data
+            tx_conn, uuid.UUID(trade_id), trade_data, trace,
         )
 
         rows = tx_conn.execute(
@@ -173,7 +175,8 @@ class TestNovationMarginLock:
             "price": Decimal("50"),
         }
 
-        novate_trade(tx_conn, uuid.UUID(trade_id), trade_data)
+        trace = TraceContext.new_system("test")
+        novate_trade(tx_conn, uuid.UUID(trade_id), trade_data, trace)
 
         # margin_rate_im = 0.1, so margin = 100 * 50 * 0.1 = 500
         rows = tx_conn.execute(
@@ -207,7 +210,8 @@ class TestNovationJournalBalance:
             "price": Decimal("50"),
         }
 
-        novate_trade(tx_conn, uuid.UUID(trade_id), trade_data)
+        trace = TraceContext.new_system("test")
+        novate_trade(tx_conn, uuid.UUID(trade_id), trade_data, trace)
 
         rows = tx_conn.execute(
             """
@@ -298,3 +302,209 @@ class TestNovationValidation:
 
         with pytest.raises(ValidationError, match="not found"):
             validate_trade(tx_conn, trade_data)
+
+
+class TestNovationStateTransitions:
+    """Test that novation rejects trades not in 'submitted' status."""
+
+    def test_novate_already_novated_trade_rejected(self, tx_conn):
+        """Cannot novate a trade that has already been novated."""
+        buyer = _insert_member(tx_conn)
+        seller = _insert_member(tx_conn)
+        inst = _insert_instrument(tx_conn)
+        trade_id = _insert_trade(tx_conn, buyer, seller, inst)
+        trace = TraceContext.new_system("test")
+
+        trade_data = {
+            "buyer_member_id": buyer,
+            "seller_member_id": seller,
+            "instrument_id": inst,
+            "quantity": Decimal("100"),
+            "price": Decimal("50"),
+        }
+
+        novate_trade(tx_conn, uuid.UUID(trade_id), trade_data, trace)
+
+        with pytest.raises(ValidationError, match="novated"):
+            novate_trade(
+                tx_conn, uuid.UUID(trade_id), trade_data, trace,
+            )
+
+    def test_novate_rejected_trade_rejected(self, tx_conn):
+        """Cannot novate a trade that has been rejected."""
+        buyer = _insert_member(tx_conn)
+        seller = _insert_member(tx_conn)
+        inst = _insert_instrument(tx_conn)
+        trade_id = _insert_trade(tx_conn, buyer, seller, inst)
+
+        tx_conn.execute(
+            "UPDATE trades SET status = 'rejected' WHERE id = %s",
+            (trade_id,),
+        )
+
+        trade_data = {
+            "buyer_member_id": buyer,
+            "seller_member_id": seller,
+            "instrument_id": inst,
+            "quantity": Decimal("100"),
+            "price": Decimal("50"),
+        }
+        trace = TraceContext.new_system("test")
+
+        with pytest.raises(ValidationError, match="rejected"):
+            novate_trade(
+                tx_conn, uuid.UUID(trade_id), trade_data, trace,
+            )
+
+    def test_novate_cancelled_trade_rejected(self, tx_conn):
+        """Cannot novate a trade that has been cancelled."""
+        buyer = _insert_member(tx_conn)
+        seller = _insert_member(tx_conn)
+        inst = _insert_instrument(tx_conn)
+        trade_id = _insert_trade(tx_conn, buyer, seller, inst)
+
+        tx_conn.execute(
+            "UPDATE trades SET status = 'cancelled' WHERE id = %s",
+            (trade_id,),
+        )
+
+        trade_data = {
+            "buyer_member_id": buyer,
+            "seller_member_id": seller,
+            "instrument_id": inst,
+            "quantity": Decimal("100"),
+            "price": Decimal("50"),
+        }
+        trace = TraceContext.new_system("test")
+
+        with pytest.raises(ValidationError, match="cancelled"):
+            novate_trade(
+                tx_conn, uuid.UUID(trade_id), trade_data, trace,
+            )
+
+    def test_novate_nonexistent_trade_rejected(self, tx_conn):
+        """Cannot novate a trade that does not exist."""
+        buyer = _insert_member(tx_conn)
+        seller = _insert_member(tx_conn)
+        inst = _insert_instrument(tx_conn)
+        trace = TraceContext.new_system("test")
+
+        trade_data = {
+            "buyer_member_id": buyer,
+            "seller_member_id": seller,
+            "instrument_id": inst,
+            "quantity": Decimal("100"),
+            "price": Decimal("50"),
+        }
+
+        with pytest.raises(ValidationError, match="not found"):
+            novate_trade(
+                tx_conn, uuid.uuid4(), trade_data, trace,
+            )
+
+
+class TestIdempotency:
+    """Test idempotent behavior for trade submission and novation."""
+
+    def test_duplicate_external_trade_id_rejected(self, tx_conn):
+        """UNIQUE constraint prevents duplicate external_trade_id."""
+        buyer = _insert_member(tx_conn)
+        seller = _insert_member(tx_conn)
+        inst = _insert_instrument(tx_conn)
+
+        ext_id = f"EXT-DUPE-{uuid.uuid4().hex[:8]}"
+        tx_conn.execute(
+            """
+            INSERT INTO trades
+                (id, external_trade_id, instrument_id,
+                 buyer_member_id, seller_member_id,
+                 quantity, price, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'submitted')
+            """,
+            (
+                str(uuid.uuid4()), ext_id, inst,
+                buyer, seller,
+                Decimal("100"), Decimal("50"),
+            ),
+        )
+
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            tx_conn.execute(
+                """
+                INSERT INTO trades
+                    (id, external_trade_id, instrument_id,
+                     buyer_member_id, seller_member_id,
+                     quantity, price, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'submitted')
+                """,
+                (
+                    str(uuid.uuid4()), ext_id, inst,
+                    buyer, seller,
+                    Decimal("50"), Decimal("100"),
+                ),
+            )
+
+    def test_double_novation_blocked(self, tx_conn):
+        """Re-novating the same trade does not create duplicate legs."""
+        buyer = _insert_member(tx_conn)
+        seller = _insert_member(tx_conn)
+        inst = _insert_instrument(tx_conn)
+        trade_id = _insert_trade(tx_conn, buyer, seller, inst)
+        trace = TraceContext.new_system("test")
+
+        trade_data = {
+            "buyer_member_id": buyer,
+            "seller_member_id": seller,
+            "instrument_id": inst,
+            "quantity": Decimal("100"),
+            "price": Decimal("50"),
+        }
+
+        novate_trade(tx_conn, uuid.UUID(trade_id), trade_data, trace)
+
+        with pytest.raises(ValidationError):
+            novate_trade(
+                tx_conn, uuid.UUID(trade_id), trade_data, trace,
+            )
+
+        count = tx_conn.execute(
+            """
+            SELECT COUNT(*) FROM novated_trades
+            WHERE original_trade_id = %s
+            """,
+            (trade_id,),
+        ).fetchone()[0]
+        assert count == 2
+
+    def test_outbox_not_duplicated_on_retry(self, tx_conn):
+        """Failed re-novation does not emit a duplicate outbox event."""
+        buyer = _insert_member(tx_conn)
+        seller = _insert_member(tx_conn)
+        inst = _insert_instrument(tx_conn)
+        trade_id = _insert_trade(tx_conn, buyer, seller, inst)
+        trace = TraceContext.new_system("test")
+
+        trade_data = {
+            "buyer_member_id": buyer,
+            "seller_member_id": seller,
+            "instrument_id": inst,
+            "quantity": Decimal("100"),
+            "price": Decimal("50"),
+        }
+
+        novate_trade(tx_conn, uuid.UUID(trade_id), trade_data, trace)
+
+        with pytest.raises(ValidationError):
+            novate_trade(
+                tx_conn, uuid.UUID(trade_id), trade_data, trace,
+            )
+
+        event_count = tx_conn.execute(
+            """
+            SELECT COUNT(*) FROM outbox_events
+            WHERE aggregate_id = %s
+              AND event_type = 'trade.novated'
+            """,
+            (trade_id,),
+        ).fetchone()[0]
+        assert event_count == 1

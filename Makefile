@@ -1,10 +1,25 @@
-.PHONY: up down build migrate seed test lint format health health-docker clean topics query-topic
+.PHONY: up down build migrate seed demo logs db-balances test lint format health health-docker clean topics query-topic
 
 up:
 	docker compose up -d
 
 down:
 	docker compose down
+
+demo:
+	python run_demo.py
+
+logs:
+	docker compose logs -f --tail=100
+
+db-balances:
+	docker compose exec postgres psql -U ccp_admin -d ccp_clearing -c \
+		"SELECT m.name, a.account_type, a.pool, COALESCE(ab.balance, 0) AS balance \
+		 FROM accounts a \
+		 JOIN members m ON m.id = a.member_id \
+		 LEFT JOIN account_balances ab ON ab.account_id = a.id \
+		 WHERE COALESCE(ab.balance, 0) != 0 \
+		 ORDER BY m.name, a.account_type, a.pool;"
 
 build:
 	docker build -t ccp-base:latest -f Dockerfile.base .

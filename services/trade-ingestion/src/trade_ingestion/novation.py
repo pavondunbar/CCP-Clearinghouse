@@ -100,7 +100,22 @@ def novate_trade(
 
     Returns:
         Dict with buyer_novated_id and seller_novated_id.
+
+    Raises:
+        ValidationError: If trade is not in 'submitted' status.
     """
+    row = conn.execute(
+        "SELECT status FROM trades WHERE id = %s",
+        (str(trade_id),),
+    ).fetchone()
+    if row is None:
+        raise ValidationError(f"Trade {trade_id} not found")
+    if row[0] != "submitted":
+        raise ValidationError(
+            f"Trade {trade_id} cannot be novated: "
+            f"status is '{row[0]}', expected 'submitted'"
+        )
+
     conn.execute(
         "UPDATE trades SET status = 'novated', updated_at = now() "
         "WHERE id = %s",

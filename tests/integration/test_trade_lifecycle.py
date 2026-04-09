@@ -11,6 +11,7 @@ from decimal import Decimal
 import psycopg
 
 from ccp_shared.enums import NettingCycleType
+from ccp_shared.trace import TraceContext
 from netting_engine.netting import run_netting_cycle
 from trade_ingestion.novation import novate_trade, validate_trade
 
@@ -158,8 +159,9 @@ class TestTradeSubmissionAndNovation:
         }
 
         validate_trade(tx_conn, trade_data)
+        trace = TraceContext.new_system("test")
         result = novate_trade(
-            tx_conn, uuid.UUID(trade_id), trade_data
+            tx_conn, uuid.UUID(trade_id), trade_data, trace,
         )
 
         # Trade status updated to 'novated'
@@ -229,7 +231,8 @@ class TestNovationThenNetting:
                 "quantity": qty,
                 "price": px,
             }
-            novate_trade(tx_conn, uuid.UUID(tid), trade_data)
+            trace = TraceContext.new_system("test")
+            novate_trade(tx_conn, uuid.UUID(tid), trade_data, trace)
 
         cut_off = datetime.now(timezone.utc)
         result = run_netting_cycle(
