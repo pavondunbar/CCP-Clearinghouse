@@ -130,7 +130,7 @@ db-balances:
 
 db-ledger:
 	docker compose exec postgres psql -U admin_user -d ccp_clearing -c \
-		"SELECT j.journal_type, je.debit, je.credit, je.narrative, je.created_at \
+		"SELECT j.journal_type, je.account_id, je.debit, je.credit, je.created_at \
 		 FROM journal_entries je \
 		 JOIN journals j ON j.id = je.journal_id \
 		 ORDER BY je.created_at DESC \
