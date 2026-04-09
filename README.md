@@ -731,31 +731,69 @@ This starts:
 **Run the full demo:**
 
 ```bash
-python run_demo.py
+make demo
 ```
 
 The demo script waits for all services to become healthy, then drives the full clearing lifecycle through the API gateway — trade submission, novation, netting, settlement, and reconciliation.
 
+### Makefile Reference
+
+Run `make help` to see all available targets. The full list:
+
+| Category | Target | Description |
+|----------|--------|-------------|
+| **Lifecycle** | `make up` | Start all containers |
+| | `make down` | Stop all containers |
+| | `make restart` | Restart all containers |
+| | `make build` | Build base image and all services |
+| | `make clean` | Stop containers and delete volumes |
+| | `make ps` | Show container status |
+| **Demo & Testing** | `make demo` | Run full clearing lifecycle demo |
+| | `make test` | Run all tests |
+| | `make test-unit` | Run unit tests only |
+| | `make test-integration` | Run integration tests (testcontainers) |
+| | `make test-e2e` | Run end-to-end demo against live stack |
+| **Observability** | `make logs` | Tail all service logs |
+| | `make health` | Check service health (local) |
+| | `make health-docker` | Check service health (in-container) |
+| | `make integrity` | Run ledger reconciliation check |
+| | `make monitoring-up` | Start Prometheus + Grafana |
+| | `make monitoring-down` | Stop Prometheus + Grafana |
+| **Database** | `make db-balances` | Show non-zero account balances |
+| | `make db-ledger` | Show recent journal entries |
+| | `make db-rtgs` | Show settlement instructions |
+| | `make shell-pg` | Open interactive psql shell |
+| | `make migrate` | Run Alembic migrations |
+| | `make seed` | Seed members, instruments, accounts |
+| | `make seed-accounts` | Alias for `make seed` |
+| **Kafka** | `make topics` | List all Kafka topics |
+| | `make kafka-tail TOPIC=<name>` | Tail a Kafka topic |
+| | `make query-topic ARGS=...` | Query topic messages |
+| | `make shell-kafka` | Open Kafka container shell |
+| **Code Quality** | `make lint` | Run ruff linter |
+| | `make format` | Auto-format with ruff |
+| **Docs** | `make open-docs` | Open API docs in browser |
+
 **Verify health:**
 
 ```bash
-curl http://localhost:8000/health
+make health
 ```
 
 **View logs:**
 
 ```bash
-docker compose logs -f                          # All services
-docker compose logs -f trade-ingestion          # Single service
-docker compose logs -f settlement-engine        # Settlement events
-docker compose logs -f liquidation-engine       # Default waterfall
+make logs                                        # All services
+docker compose logs -f trade-ingestion           # Single service
+docker compose logs -f settlement-engine         # Settlement events
+docker compose logs -f liquidation-engine        # Default waterfall
 ```
 
 **Inspect database:**
 
 ```bash
-# Connect to PostgreSQL
-docker compose exec postgres psql -U readonly_user -d ccp_clearing
+# Open interactive PostgreSQL shell
+make shell-pg
 
 # View member positions
 SELECT * FROM member_positions;
@@ -772,11 +810,20 @@ SELECT * FROM account_balances;
 SELECT * FROM latest_prices;
 ```
 
+Or use the shortcut targets:
+
+```bash
+make db-balances    # Non-zero account balances
+make db-ledger      # Recent journal entries
+make db-rtgs        # Settlement instructions
+make integrity      # Ledger reconciliation check
+```
+
 **Tear down:**
 
 ```bash
-docker compose down        # Stop containers (keep data)
-docker compose down -v     # Stop containers AND delete volumes
+make down           # Stop containers (keep data)
+make clean          # Stop containers AND delete volumes
 ```
 
 ### Option B: Local Development
